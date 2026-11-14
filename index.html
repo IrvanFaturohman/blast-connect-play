@@ -1,40 +1,70 @@
 <!DOCTYPE html>
-<!-- [P] Blast Connect's WebGL template (user 2026-11-13: "resolusinya yang bener, potrait dong"): the game is a portrait
-     phone game, so the canvas fills the screen on a phone and is a centred 9:16 column on a wide screen. No Unity footer.
+<!-- [P] Blast Connect's WebGL template. Portrait (user 2026-11-13: "potrait dong"): the canvas fills a phone and is a
+     centred 9:16 column on a wide screen. The page's own loading screen (user 2026-11-14: "harusnya tunjukan barnya
+     berjalan … supaya user ada harapan") is the game's: the warm background with the dino, the logo, the white bar with
+     the orange fill and "LOADING..." (same places as Loading.BuildMarket), and the bar always moves: it eases toward
+     92 % over time, the real download pushes it on, and it fills only when the game is ready; then it fades into the
+     game's own loading screen (shown full on WebGL), so the hand-over can not be seen.
      Builder.WebGL selects it (PlayerSettings.WebGL.template = "PROJECT:Portrait"). -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#9dc2f5">
+    <meta name="theme-color" content="#ffb36b">
     <title>Blast Connect</title>
+    <link rel="preload" href="TemplateData/loading_bg.jpg" as="image">
+    <link rel="preload" href="TemplateData/logo.webp" as="image">
     <style>
-      html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #9dc2f5; touch-action: none;
+      @font-face { font-family: "Lilita One"; src: url("TemplateData/LilitaOne.ttf") format("truetype"); font-display: block; }
+      html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #a9b5f7; touch-action: none;
         -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
       #game { position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
-        height: 100vh; height: 100dvh; width: 100vw; max-width: calc(100dvh * 9 / 16); }
+        height: 100vh; height: 100dvh; width: 100vw; max-width: calc(100dvh * 9 / 16); overflow: hidden; }
       @supports not (height: 100dvh) { #game { max-width: calc(100vh * 9 / 16); } }
-      #unity-canvas { display: block; width: 100%; height: 100%; background: #9dc2f5; outline: none; }
-      #loading { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 18px; font: 700 20px system-ui, sans-serif; color: #2b4a8a; }
-      #bar { width: 60%; height: 14px; border-radius: 7px; background: #ffffff80; overflow: hidden; }
-      #fill { width: 0; height: 100%; border-radius: 7px; background: #3d7be0; transition: width .2s; }
+      #unity-canvas { display: block; width: 100%; height: 100%; background: #ffb36b; outline: none; }
+      #loading { position: absolute; inset: 0; background: #ffb36b url("TemplateData/loading_bg.jpg") center / cover no-repeat;
+        transition: opacity .25s ease-out; }
+      #logo { position: absolute; left: 9.26%; right: 9.26%; top: 8.55%; height: 20.9%;
+        background: url("TemplateData/logo.webp") center / contain no-repeat; }
+      #bar { position: absolute; left: 14.81%; right: 14.81%; bottom: 11.46%; height: 3.08%; border-radius: 999px;
+        background: linear-gradient(#ffffff, #e3ecfb); box-shadow: 0 0.55vh 0 #e08a4a, 0 1.2vh 1.6vh rgba(13, 20, 51, .25); }
+      #fill { position: absolute; left: 1.6%; top: 16.7%; bottom: 16.7%; width: 0; min-width: 6%; border-radius: 999px;
+        background: linear-gradient(#ffc93a, #ff8f0a); box-shadow: inset 0 .35vh .4vh rgba(255, 255, 255, .55); }
+      #label { position: absolute; left: 0; right: 0; bottom: 6%; height: 4.5%; display: flex; align-items: center;
+        justify-content: center; font: 400 3vh "Lilita One", system-ui, sans-serif; color: #fff; letter-spacing: .05em;
+        -webkit-text-stroke: .45vh #b8431c; paint-order: stroke fill; }
       #error { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 10px; border-radius: 8px;
-        background: #d33; color: #fff; font: 14px system-ui, sans-serif; display: none; }
+        background: #d33; color: #fff; font: 14px system-ui, sans-serif; display: none; z-index: 2; }
     </style>
   </head>
   <body>
     <div id="game">
       <canvas id="unity-canvas" tabindex="-1"></canvas>
-      <div id="loading"><div>Blast Connect</div><div id="bar"><div id="fill"></div></div></div>
+      <div id="loading"><div id="logo"></div><div id="bar"><div id="fill"></div></div><div id="label">LOADING...</div></div>
       <div id="error"></div>
     </div>
     <script>
       var canvas = document.querySelector("#unity-canvas");
+      var loadingEl = document.querySelector("#loading"), fillEl = document.querySelector("#fill");
       function showBanner(msg, type) {
         if (type != 'error') { console.warn(msg); return; }
         var e = document.querySelector("#error"); e.textContent = msg; e.style.display = 'block';
       }
+      // the bar: always moving (time eases it toward 92 %), the real progress pushes it on, full only when ready
+      var real = 0, shown = 0, ready = false, t0 = performance.now();
+      function tick(now) {
+        var t = (now - t0) / 1000;
+        var goal = ready ? 1 : Math.max(0.92 * (1 - Math.exp(-t / 6)), 0.92 * real);
+        shown += (goal - shown) * (ready ? 0.18 : 0.05);
+        fillEl.style.width = (96.8 * shown) + "%";
+        if (ready && shown > 0.995) {
+          fillEl.style.width = "96.8%";
+          setTimeout(function () { loadingEl.style.opacity = 0; setTimeout(function () { loadingEl.remove(); }, 300); }, 120);
+          return;
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
       var buildUrl = "Build";
       var config = {
         arguments: [],
@@ -50,11 +80,9 @@
       var script = document.createElement("script");
       script.src = buildUrl + "/WebGL.loader.js";
       script.onload = function () {
-        createUnityInstance(canvas, config, function (p) {
-          document.querySelector("#fill").style.width = (100 * p) + "%";
-        }).then(function () {
-          document.querySelector("#loading").style.display = "none";
-        }).catch(function (message) { showBanner(String(message), 'error'); });
+        createUnityInstance(canvas, config, function (p) { real = Math.max(real, p); })
+          .then(function () { ready = true; })
+          .catch(function (message) { showBanner(String(message), 'error'); });
       };
       document.body.appendChild(script);
     </script>
